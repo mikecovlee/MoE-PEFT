@@ -43,6 +43,7 @@ class TrainConfig(DispatcherConfig):
     training_steps_: int = 0
     task_name: str = "casual"
     task_: BasicTask = None
+    train_on_inputs: bool = True
     group_by_length: bool = False
     # task settings
     data_path: str = None
@@ -67,6 +68,7 @@ class TrainConfig(DispatcherConfig):
             weight_decay=config.get("weight_decay", 0.01),
             scheduler_type=config.get("scheduler_type", "constant"),
             warmup_ratio=config.get("warmup_ratio", 0),
+            train_on_inputs=config.get("train_on_inputs", True),
             group_by_length=config.get("group_by_length", False),
             data_path=config.get("data", None),
             prompt_template=config.get("prompt", None),
@@ -77,6 +79,7 @@ class TrainConfig(DispatcherConfig):
     def _dataload_fn(self, tokenizer: Tokenizer, **tokenizer_kwargs):
         prompter = None
         data = self.task_.loading_data(True, self.data_path)
+        sum_tokens = 0
         for idx, data_point in enumerate(data):
             if isinstance(data_point.inputs, Prompt):
                 if prompter is None:
@@ -84,13 +87,27 @@ class TrainConfig(DispatcherConfig):
                 data_point.inputs = prompter.generate_prompt(
                     instruction=data_point.inputs.instruction,
                     input=data_point.inputs.input,
-                    label=data_point.inputs.label,
                 )
 
-            data_point.tokens = tokenizer.encode(data_point.inputs, **tokenizer_kwargs)
-            if idx % 10000 == 0:
-                logging.info(f"Encode text data: {idx}/{len(data)}")
+            if data_point.labels is None:
+                data_point.labels = data_point.inputs
 
+            input_ids = tokenizer.encode(data_point.inputs, **tokenizer_kwargs)
+            label_ids = tokenizer.encode(data_point.labels, add_special_tokens=False)
+            data_point.tokens = input_ids + label_ids
+
+            if self.train_on_inputs:
+                data_point.labels = input_ids + label_ids
+            else:
+                data_point.labels = [-100] * len(input_ids) + label_ids
+
+            sum_tokens += len(data_point.tokens)
+            if idx % 1000 == 0:
+                logging.info(f"{self.adapter_name} tokenize data: {idx}/{len(data)}")
+
+        logging.info(
+            f"{self.adapter_name} total tokens in {self.task_name}: {sum_tokens}"
+        )
         return data
 
     def dispatcher_context(self) -> Dict[str, any]:

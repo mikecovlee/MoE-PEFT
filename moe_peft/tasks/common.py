@@ -89,8 +89,8 @@ class CasualTask(BasicTask):
                     inputs=Prompt(
                         instruction=data_point["instruction"],
                         input=data_point.get("input", None),
-                        label=data_point.get("output", None),
-                    )
+                    ),
+                    labels=data_point.get("output", None),
                 )
             )
 

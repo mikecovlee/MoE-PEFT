@@ -331,6 +331,12 @@ class Dispatcher:
                     labels = tokens.copy()
                 else:
                     labels = labels.copy()
+                # pad the tokens to align
+                while len(labels) < batch_seq_len:
+                    if pad_side == "right":
+                        labels.append(self.tokenizer_.pad_id_)
+                    else:
+                        labels.insert(0, self.tokenizer_.pad_id_)
                 batch_labels.append(labels)
 
             lora_batch_data_config.append(

@@ -49,8 +49,7 @@ class ARC(QuestionAnswerTask):
                 prompt += f" ({label}) {text}"
             prompt += "\nAnswer:"
             if is_train:
-                prompt += " " + data_point["answerKey"]
-                labels = None
+                labels = data_point["answerKey"]
             else:
                 labels = [self.labels2id_[data_point["answerKey"]]]
             ret.append(InputData(inputs=prompt, labels=labels))
