@@ -77,8 +77,7 @@ class BoolQ(QuestionAnswerTask):
             )
             answer = "true" if data_point["answer"] else "false"
             if is_train:
-                prompt += f" {answer}"
-                labels = None
+                labels = answer
             else:
                 labels = [self.labels2id_[answer]]
             ret.append(InputData(inputs=prompt, labels=labels))
@@ -110,8 +109,7 @@ class OpenBookQA(QuestionAnswerTask):
                 prompt += f" ({label}) {text}"
             prompt += "\nAnswer:"
             if is_train:
-                prompt += " " + data_point["answerKey"]
-                labels = None
+                labels = data_point["answerKey"]
             else:
                 labels = [self.labels2id_[data_point["answerKey"]]]
             ret.append(InputData(inputs=prompt, labels=labels))
@@ -138,8 +136,7 @@ class PIQA(QuestionAnswerTask):
             prompt += "\nCorrect solution:"
             answer = self.labels_[data_point["label"]]
             if is_train:
-                prompt += f" {answer}"
-                labels = None
+                labels = answer
             else:
                 labels = [data_point["label"]]
             ret.append(InputData(inputs=prompt, labels=labels))
@@ -168,8 +165,7 @@ class SIQA(QuestionAnswerTask):
             prompt += "\nAnswer:"
             label = int(data_point["label"]) - 1
             if is_train:
-                prompt += f" {self.labels_[label]}"
-                labels = None
+                labels = self.labels_[label]
             else:
                 labels = [label]
             ret.append(InputData(inputs=prompt, labels=labels))
@@ -200,8 +196,7 @@ class HellaSwag(QuestionAnswerTask):
             prompt += "\nAnswer:"
             label = int(data_point["label"])
             if is_train:
-                prompt += f" {self.labels_[label]}"
-                labels = None
+                labels = self.labels_[label]
             else:
                 labels = [label]
             ret.append(InputData(inputs=prompt, labels=labels))
@@ -230,8 +225,7 @@ class WinoGrande(QuestionAnswerTask):
             prompt += "\nAnswer:"
             label = int(data_point["answer"]) - 1
             if is_train:
-                prompt += f" {self.labels_[label]}"
-                labels = None
+                labels = self.labels_[label]
             else:
                 labels = [label]
             ret.append(InputData(inputs=prompt, labels=labels))
@@ -261,8 +255,7 @@ class CommonSenseQA(QuestionAnswerTask):
                 prompt += f" ({label}) {text}"
             prompt += "\nAnswer:"
             if is_train:
-                prompt += " " + data_point["answerKey"]
-                labels = None
+                labels = data_point["answerKey"]
             else:
                 labels = [self.labels2id_[data_point["answerKey"]]]
             ret.append(InputData(inputs=prompt, labels=labels))
@@ -295,13 +288,10 @@ class PubMedQA(QuestionAnswerTask):
                 prompt += f"({label}) {text}\n"
             answer = data_point["final_decision"]
             assert answer in self.labels2id_
+            prompt += "Answer:"
             if is_train:
-                prompt += f"Long Answer:\n{data_point['long_answer']}\n"
-                prompt += "Answer:"
-                prompt += f" {answer}"
-                labels = None
+                labels = answer
             else:
-                prompt += "Answer:"
                 labels = [self.labels2id_[answer]]
             ret.append(InputData(inputs=prompt, labels=labels))
 
