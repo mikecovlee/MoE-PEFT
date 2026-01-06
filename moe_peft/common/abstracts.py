@@ -44,14 +44,16 @@ class LLMCache(torch.nn.Module):
 
     def reorder_cache(self, beam_idx: torch.LongTensor):
         for layer_idx in range(len(self.key_cache)):
-            if self.key_cache[layer_idx] != []:
-                device = self.key_cache[layer_idx].device
-                self.key_cache[layer_idx] = self.key_cache[layer_idx].index_select(
+            key_cache_layer = self.key_cache[layer_idx]
+            if isinstance(key_cache_layer, torch.Tensor) and key_cache_layer.numel() > 0:
+                device = key_cache_layer.device
+                self.key_cache[layer_idx] = key_cache_layer.index_select(
                     0, beam_idx.to(device)
                 )
-            if self.value_cache[layer_idx] != []:
-                device = self.value_cache[layer_idx].device
-                self.value_cache[layer_idx] = self.value_cache[layer_idx].index_select(
+            value_cache_layer = self.value_cache[layer_idx]
+            if isinstance(value_cache_layer, torch.Tensor) and value_cache_layer.numel() > 0:
+                device = value_cache_layer.device
+                self.value_cache[layer_idx] = value_cache_layer.index_select(
                     0, beam_idx.to(device)
                 )
 

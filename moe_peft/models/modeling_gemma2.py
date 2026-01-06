@@ -52,11 +52,7 @@ class Gemma2RotaryEmbedding(nn.Module):
             "base": config.rope_theta_,
             "max_position_embeddings": config.max_seq_len_,
         }
-        if config is None:
-            self.rope_type = rope_type
-            self.max_seq_len_cached = config.max_seq_len_
-            self.original_max_seq_len = config.max_seq_len_
-        else:
+        if config is not None:
             # BC: "rope_type" was originally "type"
             if config.rope_scaling_ is not None:
                 self.rope_type = config.rope_scaling_.get(

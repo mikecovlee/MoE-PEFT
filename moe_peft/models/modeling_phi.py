@@ -81,9 +81,9 @@ class PhiAttention(LLMAttention):
     ):
         super().__init__()
         # attention
-        self.wq_: Linear = Linear(q_proj, config.device_)
-        self.wk_: Linear = Linear(k_proj, config.device_)
-        self.wv_: Linear = Linear(v_proj, config.device_)
+        self.q_proj_: Linear = Linear(q_proj, config.device_)
+        self.k_proj_: Linear = Linear(k_proj, config.device_)
+        self.v_proj_: Linear = Linear(v_proj, config.device_)
         self.dense_: Linear = Linear(dense, config.device_)
         # config
         self.layer_idx_ = idx
@@ -114,9 +114,9 @@ class PhiAttention(LLMAttention):
 
     def state_dict(self) -> Dict[str, Linear]:
         return {
-            "q_proj": self.wq_,
-            "k_proj": self.wk_,
-            "v_proj": self.wv_,
+            "q_proj": self.q_proj_,
+            "k_proj": self.k_proj_,
+            "v_proj": self.v_proj_,
             "dense": self.dense_,
         }
 
@@ -131,9 +131,9 @@ class PhiAttention(LLMAttention):
     ):
         batch_size, max_seq_len, _ = hidden_states.shape
 
-        xq = self.wq_.forward(hidden_states, input_args)
-        xk = self.wk_.forward(hidden_states, input_args)
-        xv = self.wv_.forward(hidden_states, input_args)
+        xq = self.q_proj_.forward(hidden_states, input_args)
+        xk = self.k_proj_.forward(hidden_states, input_args)
+        xv = self.v_proj_.forward(hidden_states, input_args)
 
         xq = self.q_layernorm_(xq)
         xk = self.k_layernorm_(xk)
@@ -209,9 +209,9 @@ class PhiFlashAttention2(PhiAttention):
     ):
         batch_size, max_seq_len, _ = hidden_states.shape
 
-        xq = self.wq_.forward(hidden_states, input_args)
-        xk = self.wk_.forward(hidden_states, input_args)
-        xv = self.wv_.forward(hidden_states, input_args)
+        xq = self.q_proj_.forward(hidden_states, input_args)
+        xk = self.k_proj_.forward(hidden_states, input_args)
+        xv = self.v_proj_.forward(hidden_states, input_args)
 
         xq = self.q_layernorm_(xq)
         xk = self.k_layernorm_(xk)

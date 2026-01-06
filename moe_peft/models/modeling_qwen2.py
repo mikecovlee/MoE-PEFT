@@ -86,7 +86,7 @@ class Qwen2Attention(LlamaAttention):
             self.config_.use_sliding_window_
             and self.config_.sliding_window_ is not None
             and self.config_.max_window_layers_ is not None
-            and self.layer_idx >= self.config_.max_window_layers_
+            and self.layer_idx_ >= self.config_.max_window_layers_
         ):
             sliding_window = self.config_.sliding_window_
 

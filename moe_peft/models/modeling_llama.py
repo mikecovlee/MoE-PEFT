@@ -136,10 +136,10 @@ class LlamaAttention(LLMAttention):
     ):
         super().__init__()
         # attention
-        self.wq_: Linear = Linear(wq, config.device_)  # dim * dim
-        self.wk_: Linear = Linear(wk, config.device_)  # dim * dim
-        self.wv_: Linear = Linear(wv, config.device_)  # dim * dim
-        self.wo_: Linear = Linear(wo, config.device_)  # dim * dim
+        self.q_proj_: Linear = Linear(wq, config.device_)  # dim * dim
+        self.k_proj_: Linear = Linear(wk, config.device_)  # dim * dim
+        self.v_proj_: Linear = Linear(wv, config.device_)  # dim * dim
+        self.o_proj_: Linear = Linear(wo, config.device_)  # dim * dim
         # config
         self.layer_idx_ = idx
         self.config_ = config
@@ -156,10 +156,10 @@ class LlamaAttention(LLMAttention):
 
     def state_dict(self) -> Dict[str, Linear]:
         return {
-            "q_proj": self.wq_,
-            "k_proj": self.wk_,
-            "v_proj": self.wv_,
-            "o_proj": self.wo_,
+            "q_proj": self.q_proj_,
+            "k_proj": self.k_proj_,
+            "v_proj": self.v_proj_,
+            "o_proj": self.o_proj_,
         }
 
     def forward(
@@ -173,9 +173,9 @@ class LlamaAttention(LLMAttention):
     ):
         batch_size, max_seq_len, _ = hidden_states.shape
 
-        xq = self.wq_.forward(hidden_states, input_args)
-        xk = self.wk_.forward(hidden_states, input_args)
-        xv = self.wv_.forward(hidden_states, input_args)
+        xq = self.q_proj_.forward(hidden_states, input_args)
+        xk = self.k_proj_.forward(hidden_states, input_args)
+        xv = self.v_proj_.forward(hidden_states, input_args)
 
         # conver shape to multi head
         xq = xq.view(batch_size, max_seq_len, self.n_heads_, self.head_dim_).transpose(
@@ -226,7 +226,7 @@ class LlamaAttention(LLMAttention):
         ).contiguous()
 
         # get output attention score
-        return self.wo_.forward(attention_score, input_args)
+        return self.o_proj_.forward(attention_score, input_args)
 
 
 class LlamaMLP(LLMFeedForward):
