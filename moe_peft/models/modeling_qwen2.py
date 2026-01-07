@@ -1,12 +1,12 @@
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
-from transformers.models.qwen2 import modeling_qwen2
 
 try:
     from transformers.models.qwen3 import modeling_qwen3
+
     HAS_QWEN3 = True
 except ImportError:
     modeling_qwen3 = None
@@ -134,7 +134,9 @@ class Qwen2ForCausalLM(LlamaForCausalLM):
         use_sliding_window: bool = False,
         device: str = executor.default_device_name(),
     ):
-        llm_config = llm_model.config  # Union[modeling_qwen2.Qwen2Config, modeling_qwen3.Qwen3Config] when qwen3 is available
+        llm_config = (
+            llm_model.config
+        )  # Union[modeling_qwen2.Qwen2Config, modeling_qwen3.Qwen3Config] when qwen3 is available
         llm_args = Qwen2Config(
             name_or_path_=llm_config.name_or_path,
             vocab_size_=llm_config.vocab_size,
