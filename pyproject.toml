@@ -14,15 +14,13 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "torch>=2.4.0,<2.6.0",
+    "torch==2.9.1",
     "datasets",
     "evaluate",
-    "accelerate",
-    "transformers>=4.48.0,<4.49.0",
+    "transformers==4.57.3",
     "sentencepiece",
     "huggingface_hub",
-    "scikit-learn",
-    "tiktoken",
+    "packaging",
 ]
 
 [project.urls]
