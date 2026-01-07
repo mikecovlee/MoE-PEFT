@@ -8,6 +8,7 @@ from transformers.models.qwen2 import modeling_qwen2
 
 try:
     from transformers.models.qwen3 import modeling_qwen3
+
     HAS_QWEN3 = True
 except ImportError:
     modeling_qwen3 = None
@@ -221,7 +222,7 @@ class MistralForCausalLM(LlamaForCausalLM):
         qwen_configs = (modeling_qwen2.Qwen2Config,)
         if HAS_QWEN3:
             qwen_configs = (modeling_qwen2.Qwen2Config, modeling_qwen3.Qwen3Config)
-        
+
         if isinstance(llm_config, qwen_configs):
             if hasattr(llm_config, "max_window_layers"):
                 llm_args.max_window_layers_ = llm_config.max_window_layers
