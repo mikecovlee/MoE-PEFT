@@ -14,6 +14,7 @@ from moe_peft.common import (
     LLMModelInput,
     flash_attention_forward,
 )
+from moe_peft.common.attention import repeat_kv
 from moe_peft.executors import executor
 from moe_peft.models.modeling_llama import (
     LlamaAttention,
@@ -24,7 +25,6 @@ from moe_peft.models.modeling_llama import (
     LlamaMLP,
     LlamaRMSNorm,
     apply_rotary_pos_emb,
-    repeat_kv,
 )
 from moe_peft.utils import copy_parameters
 

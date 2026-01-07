@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers.activations import ACT2FN
 from transformers.models.phi import modeling_phi
+from transformers.models.phi.configuration_phi import PhiConfig as HFPhiConfig
 from transformers.models.phi.modeling_phi import (
     PhiRotaryEmbedding,
     apply_rotary_pos_emb,
@@ -86,6 +87,7 @@ class PhiAttention(LLMAttention):
         self.v_proj_: Linear = Linear(v_proj, config.device_)
         self.dense_: Linear = Linear(dense, config.device_)
         # config
+        self.config_ = config
         self.layer_idx_ = idx
         self.dim_ = config.dim_
         self.n_heads_ = config.n_heads_
@@ -176,7 +178,11 @@ class PhiAttention(LLMAttention):
         xv = repeat_kv(xv, self.n_rep_)
 
         attention_score = eager_attention_forward(
-            xq.to(torch.float32), xk.to(torch.float32), xv, attention_mask
+            xq.to(torch.float32),
+            xk.to(torch.float32),
+            xv,
+            attention_mask,
+            model_config=self.config_,
         )
 
         attention_score = attention_score.reshape(batch_size, max_seq_len, -1)
@@ -456,12 +462,21 @@ class PhiForCausalLM(LLMForCausalLM):
         self.vocab_size_ = config.vocab_size_
         self.embed_tokens_ = PhiEmbedding(config)
         self.final_layernorm_ = PhiLayerNorm(config)
-        self.rotary_emb_ = PhiRotaryEmbedding(
-            dim=config.rotary_emb_dim_,
+        # HF PhiRotaryEmbedding expects an HF PhiConfig instance
+        rope_cfg = HFPhiConfig(
+            hidden_size=config.dim_,
+            num_attention_heads=config.n_heads_,
+            num_hidden_layers=config.n_layers_,
+            vocab_size=config.vocab_size_,
             max_position_embeddings=config.max_seq_len_,
-            base=config.rope_theta_,
-            device=config.device_,
+            rotary_dim=config.rotary_emb_dim_,
+            partial_rotary_factor=config.partial_rotary_factor_,
+            rope_theta=config.rope_theta_,
+            qk_layernorm=config.qk_layernorm_,
+            pad_token_id=config.pad_token_id_,
         )
+
+        self.rotary_emb_ = PhiRotaryEmbedding(rope_cfg, device=config.device_)
         self.lm_head_ = nn.Linear(
             config.dim_,
             config.vocab_size_,
@@ -477,7 +492,7 @@ class PhiForCausalLM(LLMForCausalLM):
     def rotary_embed(
         self, input_tensor: torch.Tensor, position_ids: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        return self.rotary_emb_(input_tensor, seq_len=position_ids[-1, -1] + 1)
+        return self.rotary_emb_(input_tensor, position_ids)
 
     def decoder_stack(self) -> List[LLMDecoder]:
         return self.layers_
