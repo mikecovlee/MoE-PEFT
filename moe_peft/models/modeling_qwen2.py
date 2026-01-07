@@ -4,7 +4,13 @@ from typing import Optional, Tuple, Union
 import torch
 import torch.nn as nn
 from transformers.models.qwen2 import modeling_qwen2
-from transformers.models.qwen3 import modeling_qwen3
+
+try:
+    from transformers.models.qwen3 import modeling_qwen3
+    HAS_QWEN3 = True
+except ImportError:
+    modeling_qwen3 = None
+    HAS_QWEN3 = False
 
 from moe_peft.common import FeedForward, LLMCache, LLMModelInput
 from moe_peft.executors import executor
@@ -123,16 +129,12 @@ class Qwen2ForCausalLM(LlamaForCausalLM):
 
     @staticmethod
     def from_pretrained(
-        llm_model: Union[
-            modeling_qwen2.Qwen2ForCausalLM, modeling_qwen3.Qwen3ForCausalLM
-        ],
+        llm_model,  # Union[modeling_qwen2.Qwen2ForCausalLM, modeling_qwen3.Qwen3ForCausalLM] when qwen3 is available
         attn_impl: str = "eager",
         use_sliding_window: bool = False,
         device: str = executor.default_device_name(),
     ):
-        llm_config: Union[modeling_qwen2.Qwen2Config, modeling_qwen3.Qwen3Config] = (
-            llm_model.config
-        )
+        llm_config = llm_model.config  # Union[modeling_qwen2.Qwen2Config, modeling_qwen3.Qwen3Config] when qwen3 is available
         llm_args = Qwen2Config(
             name_or_path_=llm_config.name_or_path,
             vocab_size_=llm_config.vocab_size,
