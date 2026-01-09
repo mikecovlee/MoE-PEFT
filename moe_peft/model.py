@@ -559,13 +559,13 @@ class LLMModel(torch.nn.Module):
                     bnb_4bit_use_double_quant=double_quant,
                     bnb_4bit_quant_type=quant_type,
                 ),
-                torch_dtype=load_dtype,
+                dtype=load_dtype,
             )
         else:
             llm_model = AutoModelForCausalLM.from_pretrained(
                 name_or_path,
                 device_map=device,
-                torch_dtype=load_dtype,
+                dtype=load_dtype,
             )
 
         llm_model.requires_grad_(False)
