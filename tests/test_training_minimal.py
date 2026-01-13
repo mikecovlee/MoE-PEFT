@@ -45,7 +45,7 @@ from moe_peft.models.modeling_mistral import (  # noqa: E402
 )
 from moe_peft.models.modeling_phi import PhiForCausalLM as MoePhi  # noqa: E402
 from moe_peft.models.modeling_phi3 import Phi3ForCausalLM as MoePhi3  # noqa: E402
-from moe_peft.models.modeling_qwen import Qwen2ForCausalLM as MoeQwen2  # noqa: E402
+from moe_peft.models.modeling_qwen import QwenForCausalLM as MoeQwen  # noqa: E402
 
 hf_chatglm = importlib.import_module("tests.chatglm.modeling_chatglm")  # type: ignore  # noqa: E402
 from moe_peft.models.modeling_chatglm import GLMForCausalLM as MoeChatGLM  # noqa: E402
@@ -207,7 +207,7 @@ MODEL_SPECS = {
     "qwen2": {
         "config": _tiny_qwen2_config,
         "hf_cls": hf_qwen2.Qwen2ForCausalLM,
-        "moe_cls": MoeQwen2,
+        "moe_cls": MoeQwen,
         "targets_lora": [
             "q_proj",
             "k_proj",

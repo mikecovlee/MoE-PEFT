@@ -19,7 +19,7 @@ from transformers.models.qwen2 import (  # type: ignore  # noqa: E402
 from moe_peft.common import AdapterConfig, LLMBatchConfig, LLMModelInput  # noqa: E402
 from moe_peft.model import LLMModel  # noqa: E402
 from moe_peft.models.modeling_llama import LlamaForCausalLM as MoeLlama  # noqa: E402
-from moe_peft.models.modeling_qwen import Qwen2ForCausalLM as MoeQwen2  # noqa: E402
+from moe_peft.models.modeling_qwen import QwenForCausalLM as MoeQwen  # noqa: E402
 
 
 def build_batch(adapter_name: str, seq_len: int = 16):
@@ -97,7 +97,7 @@ def test_qwen2_alignment_minimal_forward(dtype):
     )
     hf_model = hf_qwen2.Qwen2ForCausalLM(cfg).to(dtype)
 
-    moe = MoeQwen2.from_pretrained(
+    moe = MoeQwen.from_pretrained(
         hf_model, attn_impl="eager", use_sliding_window=False, device="cpu"
     )
     model = LLMModel(moe)

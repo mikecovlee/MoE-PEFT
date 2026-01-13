@@ -280,13 +280,30 @@ def _upad_input(
     attention_mask: torch.Tensor,
     query_length: int,
 ):
-    indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
     batch_size, kv_seq_len, num_key_value_heads, head_dim = key_layer.shape
 
-    # If KV is larger than mask length (static caches), slice to avoid attending garbage
-    if kv_seq_len > attention_mask.shape[-1]:
-        key_layer = key_layer[:, : attention_mask.shape[-1], :, :]
-        value_layer = value_layer[:, : attention_mask.shape[-1], :, :]
+    if attention_mask.shape[0] != batch_size:
+        raise ValueError(
+            f"attention_mask batch {attention_mask.shape[0]} != key batch {batch_size}"
+        )
+
+    # Normalize attention_mask length against kv_seq_len (assumes left padding)
+    if attention_mask.shape[-1] > kv_seq_len:
+        attention_mask = attention_mask[:, -kv_seq_len:]
+    elif attention_mask.shape[-1] < kv_seq_len:
+        # If the mask is all ones but shorter (typical for cache-only masks), expand to kv length.
+        if attention_mask.sum() == attention_mask.numel():
+            attention_mask = torch.ones(
+                (batch_size, kv_seq_len),
+                device=attention_mask.device,
+                dtype=attention_mask.dtype,
+            )
+        else:
+            # Pad on the left to preserve padding alignment when possible.
+            pad_len = kv_seq_len - attention_mask.shape[-1]
+            attention_mask = F.pad(attention_mask, (pad_len, 0), value=0)
+
+    indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
 
     key_layer = index_first_axis(
         key_layer.reshape(batch_size * kv_seq_len, num_key_value_heads, head_dim),
@@ -328,51 +345,36 @@ def _upad_input(
 
 
 def prepare_fa2_from_position_ids(query, key, value, position_ids):
-    query = query.view(-1, query.size(-2), query.size(-1))
+    # Flatten to (total_tokens, heads, head_dim)
+    query = query.contiguous().view(-1, query.size(-2), query.size(-1))
     key = key.contiguous().view(-1, key.size(-2), key.size(-1))
     value = value.contiguous().view(-1, value.size(-2), value.size(-1))
-    position_ids = position_ids.flatten()
-    indices_q = torch.arange(
-        position_ids.size(0), device=position_ids.device, dtype=torch.int32
-    )
+
+    # Use cumulative sequence lengths derived from position_ids==0 boundaries
+    # This is robust to non-monotonic position ids in packed sequences.
+    position_ids = position_ids.view(-1)
+    start_indices = (position_ids == 0).nonzero().view(-1)
 
     cu_seq_lens = torch.cat(
         (
-            indices_q[position_ids == 0],
+            start_indices.to(dtype=torch.int32, device=position_ids.device),
             torch.tensor(
-                position_ids.size(), device=position_ids.device, dtype=torch.int32
+                position_ids.size(0), dtype=torch.int32, device=position_ids.device
             ),
         )
     )
 
-    max_length = position_ids.max() + 1
+    # Compute max lengths from cu_seq_lens to handle non-increasing position ids
+    max_length = cu_seq_lens.diff().max().item()
 
     return (
         query,
         key,
         value,
-        indices_q,
+        start_indices.to(dtype=torch.int32, device=position_ids.device),
         (cu_seq_lens, cu_seq_lens),
         (max_length, max_length),
     )
-
-
-def fa_peft_integration_check(
-    query: torch.Tensor,
-    key: torch.Tensor,
-    value: torch.Tensor,
-    target_dtype: Optional[torch.dtype] = None,
-):
-    if target_dtype is None:
-        return query, key, value
-
-    input_dtype = value.dtype
-    if input_dtype == torch.float32:
-        query = query.to(target_dtype)
-        key = key.to(target_dtype)
-        value = value.to(target_dtype)
-
-    return query, key, value
 
 
 def flash_attention_forward(
@@ -396,10 +398,21 @@ def flash_attention_forward(
     target_dtype: Optional[torch.dtype] = None,
     **kwargs,
 ):
-    if not use_top_left_mask:
-        causal = is_causal
-    else:
-        causal = is_causal and query_length != 1
+
+    # Align causal behavior with eager path
+    causal = is_causal
+
+    # Repeat K/V heads to match Q heads when using grouped-query attention
+    n_heads_q = query_states.shape[1]
+    n_kv_heads = key_states.shape[1]
+    if n_heads_q % n_kv_heads != 0:
+        raise ValueError(
+            f"Q heads ({n_heads_q}) not divisible by KV heads ({n_kv_heads}) in flash attention."
+        )
+    n_rep = n_heads_q // n_kv_heads
+    if n_rep > 1:
+        key_states = repeat_kv(key_states, n_rep)
+        value_states = repeat_kv(value_states, n_rep)
 
     # Assuming 4D tensors, key_states.shape[1] is the key/value sequence length (source length).
     use_sliding_windows = (
@@ -420,15 +433,26 @@ def flash_attention_forward(
     if softcap is not None:
         flash_kwargs["softcap"] = softcap
 
-    # PEFT possibly silently casts tensors to fp32, this potentially reconverts to correct dtype or is a no op
-    query_states, key_states, value_states = fa_peft_integration_check(
-        query_states, key_states, value_states, target_dtype
-    )
-
     # Flash expects (batch, seq_len, heads, head_dim)
     query_states = query_states.transpose(1, 2)
     key_states = key_states.transpose(1, 2)
     value_states = value_states.transpose(1, 2)
+
+    # Default softmax scale to 1/sqrt(head_dim) if not provided
+    if softmax_scale is None:
+        head_dim = query_states.size(-1)
+        softmax_scale = 1.0 / float(head_dim) ** 0.5
+
+        # Normalize attention_mask dtype to {0,1}
+        if attention_mask is not None:
+            attention_mask = (attention_mask != 0).to(torch.int32)
+
+    # Determine whether to use varlen path by attention_mask or packed position ids
+    # Disable position_ids-only padding-free path for now; prefer attention_mask-guided varlen
+    is_fa_with_varlen_kwargs = all(
+        kwarg is not None
+        for kwarg in (cu_seq_lens_q, cu_seq_lens_k, max_length_q, max_length_k)
+    )
 
     # Contains at least one padding token in the sequence
     if attention_mask is not None:
@@ -454,12 +478,12 @@ def flash_attention_forward(
             causal=causal,
             **flash_kwargs,
         )
+        if isinstance(attn_output_unpad, tuple):
+            attn_output_unpad = attn_output_unpad[0]
         attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
 
-    elif position_ids is not None and (
-        max_length_q is not None
-        or (query_length != 1 and not (torch.diff(position_ids, dim=-1) >= 0).all())
-    ):
+    # Padding free path: sequences flattened into one total sequence
+    elif is_fa_with_varlen_kwargs:
         batch_size = query_states.size(0)
 
         if cu_seq_lens_q is None or cu_seq_lens_k is None:
@@ -501,6 +525,8 @@ def flash_attention_forward(
             causal=causal,
             **flash_kwargs,
         )
+        if isinstance(attn_output, tuple):
+            attn_output = attn_output[0]
 
         attn_output = attn_output.view(
             batch_size, -1, attn_output.size(-2), attn_output.size(-1)
@@ -516,6 +542,8 @@ def flash_attention_forward(
             causal=causal,
             **flash_kwargs,
         )
+        if isinstance(attn_output, tuple):
+            attn_output = attn_output[0]
 
     return attn_output
 

@@ -159,7 +159,8 @@ class TrainConfig(DispatcherConfig):
                 f"error batch_size {self.batch_size} and micro batch size {self.micro_batch_size}"
             )
 
-        self.accumulation_step_ = self.batch_size / self.micro_batch_size
+        # use integer accumulation to avoid floating-point modulo drift
+        self.accumulation_step_ = self.batch_size // self.micro_batch_size
         self.training_steps_ = 0
         # preparing optimizer
         paramas_count = sum(t.numel() for t in train_params.values() if t.requires_grad)

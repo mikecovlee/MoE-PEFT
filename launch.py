@@ -39,7 +39,7 @@ def compose_command(
 ):
     assert quantize in (None, "4bit", "8bit")
     assert dtype in ("fp32", "fp16", "bf16")
-    command = "python moe_peft.py"
+    command = "python -m moe_peft"
     if cuda_device is not None:
         command = f"CUDA_VISIBLE_DEVICES={cuda_device} " + command
     command += f" --base_model {base_model}"
