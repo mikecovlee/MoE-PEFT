@@ -83,7 +83,7 @@ For flash attention, manual installation of the following dependencies is requir
 
 ```bash
 pip3 install ninja
-pip3 install flash-attn==2.5.8 --no-build-isolation
+pip3 install flash-attn==2.8.3 --no-build-isolation
 ```
 
 If any attention method is not specified, flash attention is used if available.
@@ -131,7 +131,6 @@ Example of (4): `export MOE_PEFT_METRIC_PATH=/path-to-your-git-repo/evaluate/met
 
  + Quantization with Qwen2 have no effect (same with transformers).
  + Applying quantization with DoRA will result in higher memory and computation cost (same with PEFT).
- + Sliding window attention with generate cache may product abnormal output.
 
 ## Installation
 
