@@ -22,23 +22,27 @@ from moe_peft.utils import copy_parameters
 
 
 @dataclass
-class Qwen2Config(LlamaConfig):
+class QwenConfig(LlamaConfig):
     use_sliding_window_: bool = False
     max_window_layers_: int = None
     sliding_window_: int = None
 
 
-class Qwen2Attention(LlamaAttention):
+class QwenAttention(LlamaAttention):
     def __init__(
         self,
-        wq: nn.Module,
-        wk: nn.Module,
-        wv: nn.Module,
-        wo: nn.Module,
+        q_proj: nn.Module,
+        k_proj: nn.Module,
+        v_proj: nn.Module,
+        o_proj: nn.Module,
+        q_norm: Optional[nn.Module],
+        k_norm: Optional[nn.Module],
         idx: int,
-        config: Qwen2Config,
+        config: QwenConfig,
     ):
-        super().__init__(wq, wk, wv, wo, idx, config)
+        super().__init__(q_proj, k_proj, v_proj, o_proj, idx, config)
+        self.q_norm_: nn.Module = nn.Identity() if q_norm is None else q_norm
+        self.k_norm_: nn.Module = nn.Identity() if k_norm is None else k_norm
         self.config_ = config
 
     def forward(
@@ -56,11 +60,11 @@ class Qwen2Attention(LlamaAttention):
         key_states = self.k_proj_(hidden_states, input_args)
         value_states = self.v_proj_(hidden_states, input_args)
 
-        query_states = query_states.view(
-            bsz, q_len, self.n_heads_, self.head_dim_
+        query_states = self.q_norm_(
+            query_states.view(bsz, q_len, self.n_heads_, self.head_dim_)
         ).transpose(1, 2)
-        key_states = key_states.view(
-            bsz, q_len, self.n_kv_heads_, self.head_dim_
+        key_states = self.k_norm_(
+            key_states.view(bsz, q_len, self.n_kv_heads_, self.head_dim_)
         ).transpose(1, 2)
         value_states = value_states.view(
             bsz, q_len, self.n_kv_heads_, self.head_dim_
@@ -117,8 +121,8 @@ class Qwen2Attention(LlamaAttention):
         return self.o_proj_(attn_output, input_args)
 
 
-class Qwen2ForCausalLM(LlamaForCausalLM):
-    def __init__(self, config: Qwen2Config) -> None:
+class QwenForCausalLM(LlamaForCausalLM):
+    def __init__(self, config: QwenConfig) -> None:
         super().__init__(config)
 
     @staticmethod
@@ -133,7 +137,7 @@ class Qwen2ForCausalLM(LlamaForCausalLM):
         llm_config: Union[modeling_qwen2.Qwen2Config, modeling_qwen3.Qwen3Config] = (
             llm_model.config
         )
-        llm_args = Qwen2Config(
+        llm_args = QwenConfig(
             name_or_path_=llm_config.name_or_path,
             vocab_size_=llm_config.vocab_size,
             dim_=llm_config.hidden_size,
@@ -162,7 +166,7 @@ class Qwen2ForCausalLM(LlamaForCausalLM):
         if llm_args.pad_token_id_ is None:
             llm_args.pad_token_id_ = -1
 
-        model = Qwen2ForCausalLM(llm_args)
+        model = QwenForCausalLM(llm_args)
         llm_model.requires_grad_(False)
         model.embed_tokens_ = LlamaEmbedding(
             llm_model.model.embed_tokens.weight, llm_args.pad_token_id_
@@ -172,11 +176,13 @@ class Qwen2ForCausalLM(LlamaForCausalLM):
 
         for idx, layer in enumerate(llm_model.model.layers):
             decoder = LlamaDecoderLayer(idx)
-            decoder.self_attn_ = Qwen2Attention(
+            decoder.self_attn_ = QwenAttention(
                 layer.self_attn.q_proj,
                 layer.self_attn.k_proj,
                 layer.self_attn.v_proj,
                 layer.self_attn.o_proj,
+                layer.self_attn.q_norm if hasattr(layer.self_attn, "q_norm") else None,
+                layer.self_attn.k_norm if hasattr(layer.self_attn, "k_norm") else None,
                 idx,
                 llm_args,
             )
